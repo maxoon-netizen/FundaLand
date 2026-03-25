@@ -1,0 +1,9 @@
+venv/
+.env
+*.db
+*.log
+.browser_data/
+__pycache__/
+*.pyc
+page_dump.html
+page_screenshot.png
