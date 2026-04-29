@@ -83,8 +83,15 @@ def _safe_text(el, css: str) -> str:
 def _parse_card(root, href: str, listing_id: str) -> dict | None:
     url = urljoin(BASE, href.split("?")[0])
 
-    # Title — the H2 holds "Street Number\n1234 AB City"; we take the street line
+    # Title — regular cards have H2 = "Street Number\n1234 AB City" (no euro sign).
+    # Toppositie / sponsored cards mash everything into one line:
+    # "Street Number City, € 675.000 k.k." — that '€' in the H2 is the reliable
+    # discriminator. We skip those entirely: their DOM lacks separate location/
+    # area divs, and they're sponsored slots that don't necessarily honor the
+    # search filters (apartments, distant cities, etc. can leak through).
     raw_title = _safe_text(root, "h2")
+    if "€" in raw_title:
+        return None
     title = raw_title.split("\n")[0].strip() if raw_title else ""
 
     # Subtitle — postcode + city (e.g. "1704 DM Heerhugowaard")
