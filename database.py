@@ -203,6 +203,7 @@ async def search_listings(
     min_area: float | None = None,
     max_area: float | None = None,
     max_days: int | None = None,
+    source: str | None = None,
     limit: int = 20,
 ) -> list[dict]:
     """Search listings by criteria."""
@@ -225,6 +226,9 @@ async def search_listings(
         cutoff = (datetime.utcnow() - timedelta(days=max_days)).isoformat()
         conditions.append("first_seen >= ?")
         params.append(cutoff)
+    if source is not None:
+        conditions.append("source = ?")
+        params.append(source)
 
     where = " AND ".join(conditions) if conditions else "1=1"
     params.append(limit)

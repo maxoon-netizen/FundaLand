@@ -58,10 +58,15 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/filter — Show current filters\n"
         "/price 100000 500000 — Set price range (\u20ac)\n"
         "/area 10000 50000 — Set area range (m\u00b2)\n"
-        "/days 7 — Only listings from last N days\n"
-        "/clear — Clear all filters\n"
-        "/stats — Database statistics\n"
-        "/latest — 5 most recent listings\n",
+        "/days 7 — Persistent freshness filter\n"
+        "/clear — Clear all filters\n\n"
+        "<b>Browse</b>\n"
+        "/recent [days] — All listings from last N days (default 14)\n"
+        "/funda [days] — Funda detached houses, last N days\n"
+        "/agri [days] — Agricultural listings, last N days\n"
+        "/latest — 5 most recent listings\n\n"
+        "<b>Other</b>\n"
+        "/stats — Database statistics\n",
         parse_mode="HTML",
     )
 
@@ -164,6 +169,23 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\u2705 All filters cleared.")
 
 
+async def _send_paginated(update: Update, results: list, header: str, empty_msg: str):
+    """Send a list of listings as one or more Telegram messages, chunked at 4000 chars."""
+    if not results:
+        await update.message.reply_text(empty_msg)
+        return
+
+    current = header
+    for r in results:
+        entry = "\n" + format_search_result(r) + "\n\u2500\u2500\u2500"
+        if len(current + entry) > 4000:
+            await update.message.reply_text(current, parse_mode="HTML", disable_web_page_preview=True)
+            current = ""
+        current += entry
+    if current:
+        await update.message.reply_text(current, parse_mode="HTML", disable_web_page_preview=True)
+
+
 async def cmd_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = str(update.effective_chat.id)
     filters = await get_filters(chat_id)
@@ -175,25 +197,41 @@ async def cmd_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 kwargs[key] = filters[key]
 
     results = await search_listings(**kwargs, limit=20)
-
-    if not results:
-        await update.message.reply_text("No listings match your filters.")
-        return
-
-    # Send results in batches
     header = f"\U0001F50D Found {len(results)} listing(s):\n"
-    messages = [header]
-    current = header
+    await _send_paginated(update, results, header, "No listings match your filters.")
 
-    for r in results:
-        entry = "\n" + format_search_result(r) + "\n\u2500\u2500\u2500"
-        if len(current + entry) > 4000:
-            await update.message.reply_text(current, parse_mode="HTML", disable_web_page_preview=True)
-            current = ""
-        current += entry
 
-    if current:
-        await update.message.reply_text(current, parse_mode="HTML", disable_web_page_preview=True)
+def _parse_days(args, default: int) -> int:
+    if not args:
+        return default
+    try:
+        return max(1, int(args[0]))
+    except ValueError:
+        return default
+
+
+async def cmd_recent(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show all listings from the last N days, ignoring saved filters. Default 14."""
+    days = _parse_days(context.args, 14)
+    results = await search_listings(max_days=days, limit=500)
+    header = f"\U0001F4C5 <b>Last {days} days</b> \u2014 {len(results)} listing(s):\n"
+    await _send_paginated(update, results, header, f"No listings in the last {days} days.")
+
+
+async def cmd_funda(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Funda detached houses from the last N days (default 14)."""
+    days = _parse_days(context.args, 14)
+    results = await search_listings(max_days=days, source="funda", limit=500)
+    header = f"\U0001F3E1 <b>Funda \u00b7 last {days} days</b> \u2014 {len(results)} house(s):\n"
+    await _send_paginated(update, results, header, f"No funda listings in the last {days} days.")
+
+
+async def cmd_agri(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Fundainbusiness agricultural listings from the last N days (default 14)."""
+    days = _parse_days(context.args, 14)
+    results = await search_listings(max_days=days, source="fundainbusiness", limit=500)
+    header = f"\U0001F33E <b>Agrarisch \u00b7 last {days} days</b> \u2014 {len(results)} listing(s):\n"
+    await _send_paginated(update, results, header, f"No agricultural listings in the last {days} days.")
 
 
 async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -249,6 +287,9 @@ async def post_init(app: Application):
         BotCommand("days", "Listings from last N days"),
         BotCommand("clear", "Clear all filters"),
         BotCommand("latest", "5 most recent listings"),
+        BotCommand("recent", "All listings, last N days (default 14)"),
+        BotCommand("funda", "Funda houses, last N days"),
+        BotCommand("agri", "Agricultural listings, last N days"),
         BotCommand("stats", "Database statistics"),
         BotCommand("help", "Show help"),
     ])
@@ -278,6 +319,9 @@ def main():
     app.add_handler(CommandHandler("clear", cmd_clear))
     app.add_handler(CommandHandler("search", cmd_search))
     app.add_handler(CommandHandler("latest", cmd_latest))
+    app.add_handler(CommandHandler("recent", cmd_recent))
+    app.add_handler(CommandHandler("funda", cmd_funda))
+    app.add_handler(CommandHandler("agri", cmd_agri))
     app.add_handler(CommandHandler("stats", cmd_stats))
 
     logger.info("Bot started, polling for updates...")
