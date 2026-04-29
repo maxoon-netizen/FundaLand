@@ -1,0 +1,10 @@
+[Unit]
+Description=Run FundaLand health check every 14 days
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=14d
+Persistent=true
+
+[Install]
+WantedBy=timers.target

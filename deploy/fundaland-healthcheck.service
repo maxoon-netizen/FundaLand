@@ -1,0 +1,11 @@
+[Unit]
+Description=FundaLand fortnightly health check
+After=network.target
+
+[Service]
+Type=oneshot
+User=deploy
+WorkingDirectory=/home/deploy/fundaland
+EnvironmentFile=/home/deploy/fundaland/.env
+ExecStart=/home/deploy/fundaland/venv/bin/python /home/deploy/fundaland/health_check.py
+TimeoutStartSec=120
