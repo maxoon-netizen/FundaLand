@@ -13,6 +13,7 @@ async def init_db():
         await db.execute("""
             CREATE TABLE IF NOT EXISTS listings (
                 id TEXT PRIMARY KEY,
+                source TEXT NOT NULL DEFAULT 'fundainbusiness',
                 category TEXT NOT NULL,
                 title TEXT,
                 url TEXT NOT NULL,
@@ -35,15 +36,16 @@ async def init_db():
                 max_days INTEGER
             )
         """)
-        # Migrate: add numeric columns if missing
-        try:
-            await db.execute("ALTER TABLE listings ADD COLUMN price_numeric REAL")
-        except Exception:
-            pass
-        try:
-            await db.execute("ALTER TABLE listings ADD COLUMN area_numeric REAL")
-        except Exception:
-            pass
+        # Idempotent migrations for older DBs
+        for ddl in (
+            "ALTER TABLE listings ADD COLUMN price_numeric REAL",
+            "ALTER TABLE listings ADD COLUMN area_numeric REAL",
+            "ALTER TABLE listings ADD COLUMN source TEXT NOT NULL DEFAULT 'fundainbusiness'",
+        ):
+            try:
+                await db.execute(ddl)
+            except Exception:
+                pass
         await db.commit()
 
 
@@ -108,12 +110,25 @@ async def listing_exists(listing_id: str) -> bool:
 
 
 async def save_listing(listing: dict):
+    row = {
+        "id": listing["id"],
+        "source": listing.get("source", "fundainbusiness"),
+        "category": listing["category"],
+        "title": listing.get("title"),
+        "url": listing["url"],
+        "price": listing.get("price"),
+        "price_numeric": listing.get("price_numeric"),
+        "area": listing.get("area"),
+        "area_numeric": listing.get("area_numeric"),
+        "location": listing.get("location"),
+        "image_url": listing.get("image_url"),
+    }
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """INSERT OR IGNORE INTO listings
-               (id, category, title, url, price, price_numeric, area, area_numeric, location, image_url)
-               VALUES (:id, :category, :title, :url, :price, :price_numeric, :area, :area_numeric, :location, :image_url)""",
-            listing,
+               (id, source, category, title, url, price, price_numeric, area, area_numeric, location, image_url)
+               VALUES (:id, :source, :category, :title, :url, :price, :price_numeric, :area, :area_numeric, :location, :image_url)""",
+            row,
         )
         await db.commit()
 

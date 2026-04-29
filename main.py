@@ -23,6 +23,7 @@ from database import (
     parse_area,
 )
 from scraper import scrape_all_sync
+from funda_scraper import scrape_funda_sync
 from notifier import send_listing, send_summary
 
 logging.basicConfig(
@@ -37,11 +38,15 @@ async def run(init_mode: bool = False):
     await init_db()
 
     logger.info("Starting scrape...")
-    all_listings = scrape_all_sync()
-    logger.info("Scraped %d listings total", len(all_listings))
+    fib_listings = scrape_all_sync()
+    logger.info("fundainbusiness: %d listings", len(fib_listings))
 
+    funda_listings = scrape_funda_sync()
+    logger.info("funda: %d listings", len(funda_listings))
+
+    all_listings = fib_listings + funda_listings
     if not all_listings:
-        logger.warning("No listings scraped. The site might be blocking us.")
+        logger.warning("No listings scraped. Both sites may be blocking us.")
         return
 
     # Parse numeric values
@@ -71,6 +76,7 @@ async def run(init_mode: bool = False):
     filters = await get_filters(chat_id) if chat_id else None
 
     emoji_map = {cat["name"]: cat["emoji"] for cat in config.CATEGORIES}
+    emoji_map[config.FUNDA_CATEGORY["name"]] = config.FUNDA_CATEGORY["emoji"]
 
     sent = 0
     for listing in new_listings:

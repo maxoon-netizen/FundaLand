@@ -7,3 +7,6 @@ __pycache__/
 *.pyc
 page_dump.html
 page_screenshot.png
+funda_dump.html
+funda_screenshot.png
+.claude/

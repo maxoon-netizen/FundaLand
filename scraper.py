@@ -4,46 +4,14 @@ import logging
 import re
 import time
 
-import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from config import CATEGORIES, HEADLESS, MAX_PAGES
+from browser import create_driver
+from config import CATEGORIES, MAX_PAGES
 
 logger = logging.getLogger(__name__)
-
-
-def _get_chrome_major_version() -> int | None:
-    """Detect installed Chrome major version."""
-    import subprocess
-    for cmd in ["google-chrome --version", "chromium-browser --version",
-                "chromium --version", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --version"]:
-        try:
-            out = subprocess.check_output(cmd, shell=True, stderr=subprocess.DEVNULL).decode()
-            match = re.search(r"(\d+)\.", out)
-            if match:
-                return int(match.group(1))
-        except Exception:
-            continue
-    return None
-
-
-def _create_driver() -> uc.Chrome:
-    """Create an undetected Chrome driver."""
-    options = uc.ChromeOptions()
-    if HEADLESS:
-        options.add_argument("--headless=new")
-    options.add_argument("--window-size=1280,900")
-    options.add_argument("--lang=nl-NL")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-
-    version = _get_chrome_major_version()
-    logger.info("Detected Chrome version: %s", version)
-    driver = uc.Chrome(options=options, version_main=version)
-    return driver
 
 
 def _extract_listings_from_page(driver, category: dict) -> list[dict]:
@@ -147,6 +115,7 @@ def _parse_listing_item(item, page_url: str, category: dict) -> dict | None:
 
     return {
         "id": listing_id,
+        "source": category.get("source", "fundainbusiness"),
         "category": category["name"],
         "title": title or "Unknown",
         "url": url,
@@ -188,7 +157,7 @@ def scrape_category(driver, category: dict) -> list[dict]:
 def scrape_all_sync() -> list[dict]:
     """Scrape all configured categories and return listings."""
     all_listings = []
-    driver = _create_driver()
+    driver = create_driver()
 
     try:
         for category in CATEGORIES:
